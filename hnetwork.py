@@ -8,60 +8,54 @@ class HNetwork():
 
     def __init__(self, n_neurons: int, 
                  train_rule: Literal['hebb', 'oja'] = 'hebb',
-                 update_mode: Literal['synchronous', 'asynchronous'] = 'synchronous') -> None:
+                 update_mode: Literal['sync', 'async'] = 'async') -> None:
         self.n_neurons = n_neurons
         self.train_rule = train_rule
         self.update_mode = update_mode
 
 
-    def fit(self, X: npt.NDArray, epochs: int = 10, lr: float = 1e-3) -> None:
+    def fit(self, X: npt.NDArray, epochs: int = 10, lr: float = 1e-3, verbose: int = 0) -> None:
         # X is assumed to be a M (rows) by N (columns) matrix where
         # each row is a pattern of lenght N
         assert(X.shape[1] == self.n_neurons)
         if self.train_rule == 'hebb':
-            self._fit_hebb(X)
+            self._fit_hebb(X, verbose)
         elif self.train_rule == 'oja':
-            self._fit_oja(X, epochs, lr)
+            self._fit_oja(X, epochs, lr, verbose)
 
 
-    def _fit_hebb(self, X : npt.NDArray) -> None:
+    def _fit_hebb(self, X : npt.NDArray, verbose: int = 0) -> None:
         M = X.shape[0]
-        self.weights = X.T @ X / M - np.eye(self.n_neurons)
+        self.weights = (X.T @ X) / M
+        np.fill_diagonal(self.weights, 0)
 
 
-    # def _fit_oja(self, X : npt.NDArray, epochs: int = 10, lr: float = 1e-3):
-    #     M = X.shape[0]
-    #     self.weights = np.ones(shape=(self.n_neurons, self.n_neurons))
-    #     # self.weights = np.random.random(size=(self.n_neurons, self.n_neurons)) * 0.1 - 0.05
-    #     # self._fit_hebb(X)
-    #     np.fill_diagonal(self.weights, 0)
-    #     for _ in range(epochs):
-    #         for pattern in X:
-    #             # y = pattern @ self.weights
-    #             # for i in range(self.n_neurons):
-    #             #     for j in range(self.n_neurons):
-    #             #         if i == j: continue
-    #             #         dw = lr/M*(y[i]*pattern[j] - self.weights[i,j]*(y[i]**2))
-    #             #         self.weights[i,j] += dw
-
-
-    def _fit_oja(self, X : npt.NDArray, epochs: int = 10, lr: float = 1e-3):
+    def _fit_oja(self, X : npt.NDArray, epochs: int = 10, lr: float = 1e-3, verbose: int = 0):
         self.weights = np.zeros(shape=(self.n_neurons, self.n_neurons))
         np.fill_diagonal(self.weights, 0)
-        for _ in range(epochs):
-            for pattern in X:
+        for epoch in range(epochs):
+            if verbose > 0:
+                print(f"epoch: {epoch + 1}")
+            for i, pattern in enumerate(X):
+                if verbose > 1:
+                    print(f"pattern: {i + 1}")
                 pattern = pattern.reshape(-1, 1)
                 delta_w = lr * (np.dot(pattern, pattern.T) - self.weights @ pattern @ pattern.T)
                 self.weights += delta_w
                 np.fill_diagonal(self.weights, 0)
+                if verbose > 2:
+                    print(f"max |dw|: {np.max(np.abs(delta_w))}")
+                if np.max(np.abs(delta_w)) < 1e-5:
+                    print(f"early stopping after {epoch} epochs")
+                    return
 
 
     def predict(self, x: npt.NDArray, epochs: int = 1) -> npt.NDArray:
         state = x.flatten()
         for _ in range(epochs):
-            if self.update_mode == 'synchronous':
+            if self.update_mode == 'sync':
                 state = self._predict_synchronous(state)
-            elif self.update_mode == 'asynchronous':
+            elif self.update_mode == 'async':
                 state = self._predict_asynchronous(state)
         return state
     
